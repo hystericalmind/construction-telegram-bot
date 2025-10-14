@@ -180,6 +180,17 @@ def delete_project(project_name):
     except Exception as e:
         return False, "Ошибка при удалении проекта: " + str(e)
 
+def get_project_url(project_name):
+    """Получение URL проекта"""
+    try:
+        projects = get_all_projects()
+        for project in projects:
+            if project['name'] == project_name:
+                return project['url']
+        return None
+    except:
+        return None
+
 def add_work_record(project_id, date, worker, object_name, work_type, volume, notes):
     try:
         client = get_client()
@@ -212,6 +223,188 @@ def add_work_record(project_id, date, worker, object_name, work_type, volume, no
     except Exception as e:
         print("❌ Ошибка добавления записи: " + str(e))
         return False
+
+def get_project_report(project_name):
+    """Получает отчет по проекту"""
+    try:
+        client = get_client()
+        if not client:
+            return False, "Нет доступа к API"
+
+        spreadsheet = client.open_by_key(MAIN_SPREADSHEET_ID)
+
+        try:
+            worksheet = spreadsheet.worksheet(project_name)
+        except gspread.WorksheetNotFound:
+            return False, "Проект '" + project_name + "' не найден"
+
+        # Получаем все данные
+        data = worksheet.get_all_values()
+
+        if len(data) <= 1:  # Только заголовки
+            return True, "📊 Проект: " + project_name + "\n\nНет данных для отчета"
+
+        # Анализируем данные
+        total_volume = 0
+        workers = {}
+        objects = {}
+        work_types = {}
+
+        # Пропускаем заголовок (первая строка)
+        for row in data[1:]:
+            if len(row) >= 5:  # Проверяем основные колонки
+                try:
+                    volume = float(row[4]) if row[4] else 0  # Объем работ
+                    worker = row[1]  # Монтажник
+                    object_name = row[2]  # Объект
+                    work_type = row[3]  # Вид работ
+
+                    total_volume += volume
+
+                    # Статистика по монтажникам
+                    if worker in workers:
+                        workers[worker] += volume
+                    else:
+                        workers[worker] = volume
+
+                    # Статистика по объектам
+                    if object_name in objects:
+                        objects[object_name] += volume
+                    else:
+                        objects[object_name] = volume
+
+                    # Статистика по видам работ
+                    if work_type in work_types:
+                        work_types[work_type] += volume
+                    else:
+                        work_types[work_type] = volume
+
+                except (ValueError, IndexError):
+                    continue
+
+        # Формируем отчет
+        report = "📊 ОТЧЕТ ПО ПРОЕКТУ: " + project_name + "\n\n"
+        report += "📈 Общий объем работ: " + str(total_volume) + "\n\n"
+
+        report += "👷 Монтажники:\n"
+        for worker, volume in sorted(workers.items(), key=lambda x: x[1], reverse=True)[:10]:
+            report += "• " + worker + ": " + str(volume) + "\n"
+
+        report += "\n🏗️ Объекты:\n"
+        for obj, volume in sorted(objects.items(), key=lambda x: x[1], reverse=True)[:10]:
+            report += "• " + obj + ": " + str(volume) + "\n"
+
+        report += "\n🔧 Виды работ:\n"
+        for work_type, volume in sorted(work_types.items(), key=lambda x: x[1], reverse=True)[:10]:
+            report += "• " + work_type + ": " + str(volume) + "\n"
+
+        report += "\n📋 Всего записей: " + str(len(data) - 1)
+
+        return True, report
+
+    except Exception as e:
+        return False, "Ошибка при формировании отчета: " + str(e)
+
+def get_all_workers_in_project(project_name):
+    """Получает список всех монтажников в проекте"""
+    try:
+        client = get_client()
+        if not client:
+            return []
+
+        spreadsheet = client.open_by_key(MAIN_SPREADSHEET_ID)
+        worksheet = spreadsheet.worksheet(project_name)
+        
+        data = worksheet.get_all_values()
+        if len(data) <= 1:
+            return []
+            
+        workers = set()
+        for row in data[1:]:
+            if len(row) > 1 and row[1]:  # Колонка с монтажником
+                workers.add(row[1])
+                
+        return sorted(list(workers))
+    except Exception as e:
+        print("❌ Ошибка получения монтажников: " + str(e))
+        return []
+
+def get_worker_detailed_report(project_name, worker_name):
+    """Получает детальный отчет по монтажнику"""
+    try:
+        client = get_client()
+        if not client:
+            return False, "Нет доступа к API"
+
+        spreadsheet = client.open_by_key(MAIN_SPREADSHEET_ID)
+        worksheet = spreadsheet.worksheet(project_name)
+        
+        data = worksheet.get_all_values()
+        if len(data) <= 1:
+            return True, "👷 Монтажник: " + worker_name + "\n\nНет данных для отчета"
+
+        total_volume = 0
+        work_types = {}
+        objects = {}
+        dates = {}
+        
+        for row in data[1:]:
+            if len(row) >= 5 and row[1] == worker_name:  # Совпадение по имени монтажника
+                try:
+                    volume = float(row[4]) if row[4] else 0
+                    work_type = row[3]
+                    object_name = row[2]
+                    date = row[0]
+                    
+                    total_volume += volume
+                    
+                    # Статистика по видам работ
+                    if work_type in work_types:
+                        work_types[work_type] += volume
+                    else:
+                        work_types[work_type] = volume
+                        
+                    # Статистика по объектам
+                    if object_name in objects:
+                        objects[object_name] += volume
+                    else:
+                        objects[object_name] = volume
+                        
+                    # Статистика по датам
+                    if date in dates:
+                        dates[date] += volume
+                    else:
+                        dates[date] = volume
+                        
+                except (ValueError, IndexError):
+                    continue
+
+        # Формируем отчет
+        report = "👷 ДЕТАЛЬНЫЙ ОТЧЕТ ПО МОНТАЖНИКУ: " + worker_name + "\n"
+        report += "📊 Проект: " + project_name + "\n\n"
+        report += "📈 Общий объем работ: " + str(total_volume) + "\n"
+        
+        # Считаем количество записей
+        record_count = sum(1 for row in data[1:] if len(row) > 1 and row[1] == worker_name)
+        report += "📋 Всего записей: " + str(record_count) + "\n\n"
+
+        report += "🔧 Виды работ:\n"
+        for work_type, volume in sorted(work_types.items(), key=lambda x: x[1], reverse=True):
+            report += "• " + work_type + ": " + str(volume) + "\n"
+
+        report += "\n🏗️ Объекты:\n"
+        for obj, volume in sorted(objects.items(), key=lambda x: x[1], reverse=True):
+            report += "• " + obj + ": " + str(volume) + "\n"
+
+        if dates:
+            report += "\n📅 Последние работы:\n"
+            for date, volume in sorted(dates.items(), reverse=True)[:5]:
+                report += "• " + date + ": " + str(volume) + "\n"
+
+        return True, report
+
+    except Exception as e:
+        return False, "Ошибка при формировании отчета: " + str(e)
 
 def setup_tables():
     try:
