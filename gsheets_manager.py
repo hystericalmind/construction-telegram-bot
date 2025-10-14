@@ -1,8 +1,10 @@
-﻿import gspread
+﻿﻿import gspread
 from google.oauth2.service_account import Credentials
-from config import SERVICE_ACCOUNT_FILE, SCOPES, MAIN_SPREADSHEET_ID, USERS_SHEET_NAME, PROJECTS_SHEET_NAME, DEFAULT_COLUMNS
+from config import SERVICE_ACCOUNT_FILE, SCOPES, MAIN_SPREADSHEET_ID, USERS_SHEET_NAME, PROJECTS_SHEET_NAME, \
+    DEFAULT_COLUMNS
 
 _client = None
+
 
 def get_client():
     global _client
@@ -13,6 +15,7 @@ def get_client():
         except Exception as e:
             print("❌ Ошибка авторизации Google API: " + str(e))
     return _client
+
 
 def get_sheet(sheet_name):
     try:
@@ -25,6 +28,7 @@ def get_sheet(sheet_name):
         print("❌ Ошибка получения листа " + sheet_name + ": " + str(e))
         return None
 
+
 def get_all_users():
     sheet = get_sheet(USERS_SHEET_NAME)
     if not sheet:
@@ -33,6 +37,7 @@ def get_all_users():
         return sheet.get_all_records()
     except:
         return []
+
 
 def append_user(user_data):
     sheet = get_sheet(USERS_SHEET_NAME)
@@ -49,6 +54,7 @@ def append_user(user_data):
     except:
         return False
 
+
 def remove_user(username):
     sheet = get_sheet(USERS_SHEET_NAME)
     if not sheet:
@@ -61,6 +67,7 @@ def remove_user(username):
         return False
     except:
         return False
+
 
 def rename_user(user_identifier, new_name):
     sheet = get_sheet(USERS_SHEET_NAME)
@@ -83,6 +90,7 @@ def rename_user(user_identifier, new_name):
     except:
         return False
 
+
 def get_all_projects():
     """Получает список всех проектов"""
     sheet = get_sheet(PROJECTS_SHEET_NAME)
@@ -92,6 +100,7 @@ def get_all_projects():
         return sheet.get_all_records()
     except:
         return []
+
 
 def create_new_project(project_name, admin_username):
     try:
@@ -150,6 +159,7 @@ def create_new_project(project_name, admin_username):
         print("❌ Ошибка создания проекта: " + str(e))
         return None
 
+
 def delete_project(project_name):
     """Удаление проекта"""
     try:
@@ -180,6 +190,7 @@ def delete_project(project_name):
     except Exception as e:
         return False, "Ошибка при удалении проекта: " + str(e)
 
+
 def get_project_url(project_name):
     """Получение URL проекта"""
     try:
@@ -190,6 +201,7 @@ def get_project_url(project_name):
         return None
     except:
         return None
+
 
 def add_work_record(project_id, date, worker, object_name, work_type, volume, notes):
     try:
@@ -223,6 +235,7 @@ def add_work_record(project_id, date, worker, object_name, work_type, volume, no
     except Exception as e:
         print("❌ Ошибка добавления записи: " + str(e))
         return False
+
 
 def get_project_report(project_name):
     """Получает отчет по проекту"""
@@ -305,6 +318,7 @@ def get_project_report(project_name):
     except Exception as e:
         return False, "Ошибка при формировании отчета: " + str(e)
 
+
 def get_all_workers_in_project(project_name):
     """Получает список всех монтажников в проекте"""
     try:
@@ -314,20 +328,21 @@ def get_all_workers_in_project(project_name):
 
         spreadsheet = client.open_by_key(MAIN_SPREADSHEET_ID)
         worksheet = spreadsheet.worksheet(project_name)
-        
+
         data = worksheet.get_all_values()
         if len(data) <= 1:
             return []
-            
+
         workers = set()
         for row in data[1:]:
             if len(row) > 1 and row[1]:  # Колонка с монтажником
                 workers.add(row[1])
-                
+
         return sorted(list(workers))
     except Exception as e:
         print("❌ Ошибка получения монтажников: " + str(e))
         return []
+
 
 def get_worker_detailed_report(project_name, worker_name):
     """Получает детальный отчет по монтажнику"""
@@ -338,7 +353,7 @@ def get_worker_detailed_report(project_name, worker_name):
 
         spreadsheet = client.open_by_key(MAIN_SPREADSHEET_ID)
         worksheet = spreadsheet.worksheet(project_name)
-        
+
         data = worksheet.get_all_values()
         if len(data) <= 1:
             return True, "👷 Монтажник: " + worker_name + "\n\nНет данных для отчета"
@@ -347,7 +362,7 @@ def get_worker_detailed_report(project_name, worker_name):
         work_types = {}
         objects = {}
         dates = {}
-        
+
         for row in data[1:]:
             if len(row) >= 5 and row[1] == worker_name:  # Совпадение по имени монтажника
                 try:
@@ -355,27 +370,27 @@ def get_worker_detailed_report(project_name, worker_name):
                     work_type = row[3]
                     object_name = row[2]
                     date = row[0]
-                    
+
                     total_volume += volume
-                    
+
                     # Статистика по видам работ
                     if work_type in work_types:
                         work_types[work_type] += volume
                     else:
                         work_types[work_type] = volume
-                        
+
                     # Статистика по объектам
                     if object_name in objects:
                         objects[object_name] += volume
                     else:
                         objects[object_name] = volume
-                        
+
                     # Статистика по датам
                     if date in dates:
                         dates[date] += volume
                     else:
                         dates[date] = volume
-                        
+
                 except (ValueError, IndexError):
                     continue
 
@@ -383,7 +398,7 @@ def get_worker_detailed_report(project_name, worker_name):
         report = "👷 ДЕТАЛЬНЫЙ ОТЧЕТ ПО МОНТАЖНИКУ: " + worker_name + "\n"
         report += "📊 Проект: " + project_name + "\n\n"
         report += "📈 Общий объем работ: " + str(total_volume) + "\n"
-        
+
         # Считаем количество записей
         record_count = sum(1 for row in data[1:] if len(row) > 1 and row[1] == worker_name)
         report += "📋 Всего записей: " + str(record_count) + "\n\n"
@@ -405,6 +420,7 @@ def get_worker_detailed_report(project_name, worker_name):
 
     except Exception as e:
         return False, "Ошибка при формировании отчета: " + str(e)
+
 
 def setup_tables():
     try:
