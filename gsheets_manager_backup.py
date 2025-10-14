@@ -1,4 +1,4 @@
-import gspread
+﻿﻿import gspread
 from google.oauth2.service_account import Credentials
 from config import SERVICE_ACCOUNT_FILE, SCOPES, MAIN_SPREADSHEET_ID, USERS_SHEET_NAME, PROJECTS_SHEET_NAME, \
     DEFAULT_COLUMNS
